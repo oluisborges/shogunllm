@@ -516,6 +516,9 @@ export default function Home() {
       const chatForAgent = chats.find((c) => c.id === chatId);
       const agent = agents.find((a) => a.id === (chatForAgent?.agentId || selectedAgentId));
 
+      const imageAttachments = currentFiles.filter((f) => isImageType(f.type));
+      const refImages: string[] = imageAttachments.map((f) => f.dataUrl).filter(Boolean);
+
       const assistantId = uid();
       updateChatMessages(chatId, (msgs) => [
         ...msgs,
@@ -529,14 +532,27 @@ export default function Home() {
           body: JSON.stringify({
             messages: chatHistory,
             systemPrompt: agent?.systemPrompt,
+            referenceImages: refImages.length > 0 ? refImages : undefined,
           }),
         });
         const data = await res.json();
 
+        if (!data.error && data.imageUrl) {
+          imageCache.current.set(assistantId, data.imageUrl);
+        }
+        const thumb = !data.error && data.imageUrl
+          ? await createThumbnail(data.imageUrl, 800)
+          : undefined;
+
         updateChatMessages(chatId, (msgs) =>
           msgs.map((m) =>
             m.id === assistantId
-              ? { ...m, content: data.error ? `Erro: ${data.error}` : data.content, isGenerating: false }
+              ? {
+                  ...m,
+                  content: data.error ? `Erro: ${data.error}` : data.content,
+                  imageThumbnail: thumb,
+                  isGenerating: false,
+                }
               : m
           )
         );
