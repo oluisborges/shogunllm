@@ -382,11 +382,18 @@ export default function Home() {
         { id: placeholderId, role: "assistant", content: "Gerando sua imagem...", isGenerating: true },
       ]);
 
+      const imageAttachment = currentFiles.find((f) => isImageType(f.type));
+
       try {
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: reqHeaders(),
-          body: JSON.stringify({ prompt, size: resolvedSize, model: imageModel }),
+          body: JSON.stringify({
+            prompt,
+            size: resolvedSize,
+            model: imageModel,
+            image: imageAttachment?.dataUrl || undefined,
+          }),
         });
         const data = await res.json();
 

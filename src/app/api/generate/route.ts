@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { prompt, size, model } = body;
+  const { prompt, size, model, image } = body;
 
   if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
     return NextResponse.json(
@@ -26,15 +26,30 @@ export async function POST(req: NextRequest) {
   const chosenModel = model || "gpt-image-2";
 
   try {
-    const response = await openai.images.generate({
-      model: chosenModel,
-      prompt: prompt.trim(),
-      n: 1,
-      size: size || "1024x1024",
-      quality: "auto",
-    } as Parameters<typeof openai.images.generate>[0]);
+    let response: unknown;
 
-    const result = response as unknown as { data?: Array<{ url?: string; b64_json?: string; revised_prompt?: string }> };
+    if (image && typeof image === "string") {
+      const base64Data = image.includes(",") ? image.split(",")[1] : image;
+      const buf = Buffer.from(base64Data, "base64");
+      const file = await toFile(buf, "input.png", { type: "image/png" });
+
+      response = await openai.images.edit({
+        model: chosenModel,
+        image: file,
+        prompt: prompt.trim(),
+        size: size || "1024x1024",
+      } as Parameters<typeof openai.images.edit>[0]);
+    } else {
+      response = await openai.images.generate({
+        model: chosenModel,
+        prompt: prompt.trim(),
+        n: 1,
+        size: size || "1024x1024",
+        quality: "auto",
+      } as Parameters<typeof openai.images.generate>[0]);
+    }
+
+    const result = response as { data?: Array<{ url?: string; b64_json?: string; revised_prompt?: string }> };
     const item = result.data?.[0];
     const imageUrl = item?.url || (item?.b64_json ? `data:image/png;base64,${item.b64_json}` : undefined);
     const revisedPrompt = item?.revised_prompt;
