@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI, { toFile } from "openai";
 
+async function toImageFile(src: string, name: string) {
+  let buf: Buffer;
+  if (src.startsWith("http://") || src.startsWith("https://")) {
+    const res = await fetch(src);
+    buf = Buffer.from(await res.arrayBuffer());
+  } else {
+    const base64Data = src.includes(",") ? src.split(",")[1] : src;
+    buf = Buffer.from(base64Data, "base64");
+  }
+  return toFile(buf, name, { type: "image/png" });
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const apiKey =
@@ -13,7 +25,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { prompt, size, model, image } = body;
+  const { prompt, size, model, images } = body;
 
   if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
     return NextResponse.json(
@@ -27,21 +39,17 @@ export async function POST(req: NextRequest) {
 
   try {
     let response: unknown;
+    const imgArray: string[] = Array.isArray(images) ? images : images ? [images] : [];
 
-    if (image && typeof image === "string") {
-      let buf: Buffer;
-      if (image.startsWith("http://") || image.startsWith("https://")) {
-        const imgRes = await fetch(image);
-        buf = Buffer.from(await imgRes.arrayBuffer());
-      } else {
-        const base64Data = image.includes(",") ? image.split(",")[1] : image;
-        buf = Buffer.from(base64Data, "base64");
-      }
-      const file = await toFile(buf, "input.png", { type: "image/png" });
+    if (imgArray.length > 0) {
+      const files = await Promise.all(
+        imgArray.map((src: string, i: number) => toImageFile(src, `input_${i}.png`))
+      );
+      const imageParam = files.length === 1 ? files[0] : files;
 
       response = await openai.images.edit({
         model: chosenModel,
-        image: file,
+        image: imageParam,
         prompt: prompt.trim(),
         size: size || "1024x1024",
       } as Parameters<typeof openai.images.edit>[0]);

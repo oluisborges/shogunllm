@@ -444,19 +444,20 @@ export default function Home() {
         { id: placeholderId, role: "assistant", content: "Gerando sua imagem...", isGenerating: true },
       ]);
 
-      const imageAttachment = currentFiles.find((f) => isImageType(f.type));
-      let imageForEdit = imageAttachment?.dataUrl || undefined;
+      const imageAttachments = currentFiles.filter((f) => isImageType(f.type));
+      const imagesForEdit: string[] = imageAttachments.map((f) => f.dataUrl).filter(Boolean);
 
-      if (!imageForEdit && replyToMsgId) {
-        imageForEdit = imageCache.current.get(replyToMsgId);
+      if (replyToMsgId) {
+        const cached = imageCache.current.get(replyToMsgId);
+        if (cached) imagesForEdit.unshift(cached);
       }
 
-      if (!imageForEdit) {
+      if (imagesForEdit.length === 0) {
         const prevMsgs = chats.find((c) => c.id === chatId)?.messages ?? [];
         for (let i = prevMsgs.length - 1; i >= 0; i--) {
           const m = prevMsgs[i];
           if (m.role === "assistant" && imageCache.current.has(m.id)) {
-            imageForEdit = imageCache.current.get(m.id);
+            imagesForEdit.push(imageCache.current.get(m.id)!);
             break;
           }
         }
@@ -472,7 +473,7 @@ export default function Home() {
             prompt,
             size: resolvedSize,
             model: imageModel,
-            image: imageForEdit || undefined,
+            images: imagesForEdit.length > 0 ? imagesForEdit : undefined,
           }),
         });
         const data = await res.json();
