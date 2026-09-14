@@ -557,12 +557,28 @@ export default function Home() {
   // ── Agent CRUD ────────────────────────────────────────────────────────────
 
   function saveAgent(agent: Agent) {
+    const isNew = !agents.find((a) => a.id === agent.id);
     setAgents((prev) => {
       const exists = prev.find((a) => a.id === agent.id);
       if (exists) return prev.map((a) => (a.id === agent.id ? agent : a));
       return [...prev, agent];
     });
     setEditingAgent(null);
+    if (isNew) {
+      setSelectedAgentId(agent.id);
+      setMode("chat");
+      const newChat: Chat = {
+        id: uid(),
+        title: `${agent.emoji} ${agent.name}`,
+        mode: "chat",
+        agentId: agent.id,
+        messages: [],
+        createdAt: Date.now(),
+      };
+      setChats((prev) => [newChat, ...prev]);
+      setActiveChatId(newChat.id);
+      setShowAgents(false);
+    }
   }
 
   function deleteAgent(agentId: string) {
@@ -1071,14 +1087,24 @@ export default function Home() {
                   </div>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => setSelectedAgentId(agent.id)}
-                      className={`rounded px-2 py-1 text-[10px] font-medium transition-colors ${
-                        selectedAgentId === agent.id
-                          ? "bg-shogun-lime text-shogun-dark"
-                          : "text-muted hover:text-foreground"
-                      }`}
+                      onClick={() => {
+                        setSelectedAgentId(agent.id);
+                        setMode("chat");
+                        const newChat: Chat = {
+                          id: uid(),
+                          title: `${agent.emoji} ${agent.name}`,
+                          mode: "chat",
+                          agentId: agent.id,
+                          messages: [],
+                          createdAt: Date.now(),
+                        };
+                        setChats((prev) => [newChat, ...prev]);
+                        setActiveChatId(newChat.id);
+                        setShowAgents(false);
+                      }}
+                      className="rounded px-2 py-1 text-[10px] font-medium transition-colors text-muted hover:text-shogun-lime hover:bg-shogun-green/20"
                     >
-                      {selectedAgentId === agent.id ? "Ativo" : "Usar"}
+                      Conversar
                     </button>
                     <button
                       onClick={() => setEditingAgent({ ...agent })}
