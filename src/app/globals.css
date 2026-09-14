@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+:root {
+  --shogun-dark: #1a3a2a;
+  --shogun-green: #2d5a3d;
+  --shogun-lime: #a3d54a;
+  --shogun-gray: #8a8a8a;
+  --shogun-light-gray: #b8b8b8;
+  --background: #111a14;
+  --foreground: #e8ede9;
+  --surface: #1a2b1f;
+  --surface-hover: #223628;
+  --border: #2d4a35;
+  --muted: #6b7c6f;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-shogun-dark: var(--shogun-dark);
+  --color-shogun-green: var(--shogun-green);
+  --color-shogun-lime: var(--shogun-lime);
+  --color-shogun-gray: var(--shogun-gray);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--muted);
+}
