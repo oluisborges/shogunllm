@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { prompt, size } = body;
+  const { prompt, size, model } = body;
 
   if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
     return NextResponse.json(
@@ -23,18 +23,21 @@ export async function POST(req: NextRequest) {
   }
 
   const openai = new OpenAI({ apiKey });
+  const chosenModel = model || "gpt-image-1";
 
   try {
     const response = await openai.images.generate({
-      model: "dall-e-3",
+      model: chosenModel,
       prompt: prompt.trim(),
       n: 1,
       size: size || "1024x1024",
-      quality: "standard",
-    });
+      quality: chosenModel === "dall-e-3" ? "standard" : "medium",
+    } as Parameters<typeof openai.images.generate>[0]);
 
-    const imageUrl = response.data?.[0]?.url;
-    const revisedPrompt = response.data?.[0]?.revised_prompt;
+    const result = response as unknown as { data?: Array<{ url?: string; b64_json?: string; revised_prompt?: string }> };
+    const item = result.data?.[0];
+    const imageUrl = item?.url || (item?.b64_json ? `data:image/png;base64,${item.b64_json}` : undefined);
+    const revisedPrompt = item?.revised_prompt;
 
     return NextResponse.json({ imageUrl, revisedPrompt });
   } catch (err: unknown) {

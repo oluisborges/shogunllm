@@ -43,6 +43,12 @@ const PRESET_SIZES = [
   { label: "Personalizado", value: "custom" },
 ];
 
+const IMAGE_MODELS = [
+  { label: "GPT Image 1", value: "gpt-image-1" },
+  { label: "DALL-E 3", value: "dall-e-3" },
+  { label: "DALL-E 2", value: "dall-e-2" },
+];
+
 const DEFAULT_AGENTS: Agent[] = [
   {
     id: "default",
@@ -186,6 +192,7 @@ export default function Home() {
   const [size, setSize] = useState("1024x1024");
   const [customW, setCustomW] = useState("1024");
   const [customH, setCustomH] = useState("1024");
+  const [imageModel, setImageModel] = useState("gpt-image-1");
   const [mode, setMode] = useState<"image" | "chat">("image");
   const [pendingFiles, setPendingFiles] = useState<Attachment[]>([]);
 
@@ -356,7 +363,7 @@ export default function Home() {
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: reqHeaders(),
-          body: JSON.stringify({ prompt, size: resolvedSize }),
+          body: JSON.stringify({ prompt, size: resolvedSize, model: imageModel }),
         });
         const data = await res.json();
 
@@ -711,6 +718,15 @@ export default function Home() {
           <form onSubmit={handleSubmit} className="mx-auto flex max-w-3xl flex-col gap-2">
             {mode === "image" && (
               <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={imageModel}
+                  onChange={(e) => setImageModel(e.target.value)}
+                  className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-foreground outline-none focus:border-shogun-lime"
+                >
+                  {IMAGE_MODELS.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
                 <select
                   value={size}
                   onChange={(e) => setSize(e.target.value)}
