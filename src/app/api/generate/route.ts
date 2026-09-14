@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   }
 
   const openai = new OpenAI({ apiKey });
-  const chosenModel = model || "gpt-image-2";
+  const chosenModel = model || "gpt-image-2.5-sunburst";
 
   try {
     let response: unknown;

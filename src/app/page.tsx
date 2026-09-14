@@ -47,6 +47,7 @@ const PRESET_SIZES = [
 ];
 
 const IMAGE_MODELS = [
+  { label: "GPT Image 2.5 Sunburst", value: "gpt-image-2.5-sunburst" },
   { label: "GPT Image 2", value: "gpt-image-2" },
   { label: "GPT Image 1", value: "gpt-image-1" },
 ];
@@ -228,7 +229,7 @@ export default function Home() {
   const [size, setSize] = useState("1024x1024");
   const [customW, setCustomW] = useState("1024");
   const [customH, setCustomH] = useState("1024");
-  const [imageModel, setImageModel] = useState("gpt-image-2");
+  const [imageModel, setImageModel] = useState("gpt-image-2.5-sunburst");
   const [mode, setMode] = useState<"image" | "chat">("image");
   const [pendingFiles, setPendingFiles] = useState<Attachment[]>([]);
 
