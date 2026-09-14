@@ -17,6 +17,7 @@ type Message = {
   role: "user" | "assistant";
   content: string;
   imageUrl?: string;
+  imageThumbnail?: string;
   attachments?: Attachment[];
   isGenerating?: boolean;
 };
@@ -127,6 +128,23 @@ function IconRobot({ className }: { className?: string }) {
   );
 }
 
+function IconDownload({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={className}>
+      <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
+      <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+    </svg>
+  );
+}
+
+function IconReply({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={className}>
+      <path fillRule="evenodd" d="M7.793 2.232a.75.75 0 0 1-.025 1.06L3.622 7.25h10.003a5.375 5.375 0 0 1 0 10.75H10.75a.75.75 0 0 1 0-1.5h2.875a3.875 3.875 0 0 0 0-7.75H3.622l4.146 3.957a.75.75 0 0 1-1.036 1.085l-5.5-5.25a.75.75 0 0 1 0-1.085l5.5-5.25a.75.75 0 0 1 1.06.025Z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
 function ShogunLogo({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 40 40" fill="none" className={className}>
@@ -219,14 +237,30 @@ export default function Home() {
   const [showAgents, setShowAgents] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [tempKey, setTempKey] = useState("");
+  const [replyToMsgId, setReplyToMsgId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageCache = useRef(new Map<string, string>());
 
   const activeChat = chats.find((c) => c.id === activeChatId) ?? null;
   const messages = activeChat?.messages ?? [];
   const selectedAgent = agents.find((a) => a.id === selectedAgentId) ?? agents[0];
+  const replyToMsg = replyToMsgId ? messages.find((m) => m.id === replyToMsgId) : null;
+
+  function getDisplayImage(msgId: string, thumbnail?: string) {
+    return imageCache.current.get(msgId) || thumbnail;
+  }
+
+  function downloadImage(msgId: string, thumbnail?: string) {
+    const src = imageCache.current.get(msgId) || thumbnail;
+    if (!src) return;
+    const link = document.createElement("a");
+    link.href = src;
+    link.download = `shogun-${msgId.slice(0, 8)}.png`;
+    link.click();
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -277,6 +311,7 @@ export default function Home() {
       setMode(chat.mode);
       if (chat.agentId) setSelectedAgentId(chat.agentId);
       setActiveChatId(chatId);
+      setReplyToMsgId(null);
       setShowSidebar(false);
     }
   }
@@ -404,15 +439,22 @@ export default function Home() {
       const imageAttachment = currentFiles.find((f) => isImageType(f.type));
       let imageForEdit = imageAttachment?.dataUrl || undefined;
 
+      if (!imageForEdit && replyToMsgId) {
+        imageForEdit = imageCache.current.get(replyToMsgId);
+      }
+
       if (!imageForEdit) {
         const prevMsgs = chats.find((c) => c.id === chatId)?.messages ?? [];
         for (let i = prevMsgs.length - 1; i >= 0; i--) {
-          if (prevMsgs[i].role === "assistant" && prevMsgs[i].imageUrl) {
-            imageForEdit = prevMsgs[i].imageUrl;
+          const m = prevMsgs[i];
+          if (m.role === "assistant" && imageCache.current.has(m.id)) {
+            imageForEdit = imageCache.current.get(m.id);
             break;
           }
         }
       }
+
+      setReplyToMsgId(null);
 
       try {
         const res = await fetch("/api/generate", {
@@ -427,13 +469,21 @@ export default function Home() {
         });
         const data = await res.json();
 
+        if (!data.error && data.imageUrl) {
+          imageCache.current.set(placeholderId, data.imageUrl);
+        }
+        const thumb = !data.error && data.imageUrl
+          ? await createThumbnail(data.imageUrl, 800)
+          : undefined;
+
         updateChatMessages(chatId, (msgs) =>
           msgs.map((m) =>
             m.id === placeholderId
               ? {
                   ...m,
                   content: data.error ? `Erro: ${data.error}` : data.revisedPrompt || "Imagem gerada!",
-                  imageUrl: data.error ? undefined : data.imageUrl,
+                  imageUrl: undefined,
+                  imageThumbnail: thumb,
                   isGenerating: false,
                 }
               : m
@@ -759,19 +809,34 @@ export default function Home() {
                     </div>
                   )}
                   <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
-                  {msg.imageUrl && (
-                    <div className="mt-3">
-                      <img src={msg.imageUrl} alt="Imagem gerada" className="rounded-xl" />
-                      <a
-                        href={msg.imageUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-2 inline-block text-xs text-shogun-lime underline"
-                      >
-                        Abrir imagem em nova aba
-                      </a>
-                    </div>
-                  )}
+                  {(() => {
+                    const displayImg = getDisplayImage(msg.id, msg.imageThumbnail);
+                    return displayImg ? (
+                      <div className="mt-3">
+                        <img src={displayImg} alt="Imagem gerada" className="rounded-xl" />
+                        <div className="mt-2 flex items-center gap-3">
+                          <button
+                            onClick={() => downloadImage(msg.id, msg.imageThumbnail)}
+                            className="flex items-center gap-1 text-xs text-shogun-lime transition-colors hover:text-shogun-lime/80"
+                          >
+                            <IconDownload className="h-3.5 w-3.5" />
+                            Baixar imagem
+                          </button>
+                          <button
+                            onClick={() => {
+                              setReplyToMsgId(msg.id);
+                              setMode("image");
+                              textareaRef.current?.focus();
+                            }}
+                            className="flex items-center gap-1 text-xs text-muted transition-colors hover:text-shogun-lime"
+                          >
+                            <IconReply className="h-3.5 w-3.5" />
+                            Editar esta imagem
+                          </button>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
               </div>
             ))}
@@ -809,6 +874,29 @@ export default function Home() {
                     <input type="number" min="256" max="4096" step="64" value={customH} onChange={(e) => setCustomH(e.target.value)} className="w-20 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-foreground outline-none focus:border-shogun-lime" placeholder="Altura" />
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Reply-to indicator */}
+            {replyToMsg && (
+              <div className="flex items-center gap-2 rounded-lg border border-shogun-lime/30 bg-shogun-green/10 px-3 py-2">
+                {(() => {
+                  const replyImg = getDisplayImage(replyToMsg.id, replyToMsg.imageThumbnail);
+                  return replyImg ? (
+                    <img src={replyImg} alt="" className="h-10 w-10 rounded-md object-cover" />
+                  ) : null;
+                })()}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-medium text-shogun-lime">Editando imagem</p>
+                  <p className="truncate text-xs text-muted">{replyToMsg.content}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReplyToMsgId(null)}
+                  className="text-muted hover:text-foreground"
+                >
+                  <IconClose className="h-4 w-4" />
+                </button>
               </div>
             )}
 

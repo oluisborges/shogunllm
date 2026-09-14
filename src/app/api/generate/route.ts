@@ -57,7 +57,14 @@ export async function POST(req: NextRequest) {
 
     const result = response as { data?: Array<{ url?: string; b64_json?: string; revised_prompt?: string }> };
     const item = result.data?.[0];
-    const imageUrl = item?.url || (item?.b64_json ? `data:image/png;base64,${item.b64_json}` : undefined);
+    let imageUrl: string | undefined;
+    if (item?.b64_json) {
+      imageUrl = `data:image/png;base64,${item.b64_json}`;
+    } else if (item?.url) {
+      const imgRes = await fetch(item.url);
+      const imgBuf = Buffer.from(await imgRes.arrayBuffer());
+      imageUrl = `data:image/png;base64,${imgBuf.toString("base64")}`;
+    }
     const revisedPrompt = item?.revised_prompt;
 
     return NextResponse.json({ imageUrl, revisedPrompt });
