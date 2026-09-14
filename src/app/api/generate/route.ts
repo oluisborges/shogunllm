@@ -13,6 +13,49 @@ async function toImageFile(src: string, name: string) {
   return toFile(buf, name, { type: "image/png" });
 }
 
+async function analyzeImagesWithVision(
+  openai: OpenAI,
+  images: string[],
+  userPrompt: string
+): Promise<string> {
+  const content: Array<
+    | { type: "text"; text: string }
+    | { type: "image_url"; image_url: { url: string } }
+  > = [];
+
+  content.push({
+    type: "text",
+    text: `O usuario quer gerar uma imagem e enviou ${images.length} imagem(ns) de referencia junto com esta instrucao: "${userPrompt}"
+
+Analise cada imagem de referencia detalhadamente. Descreva:
+- O que cada imagem contem (objetos, cores, estilo, texto, layout, composicao)
+- Como as imagens se relacionam com a instrucao do usuario
+
+Depois, escreva um prompt DETALHADO para um modelo de geracao de imagens que combine os elementos das imagens de referencia conforme a instrucao do usuario. O prompt deve ser extremamente especifico sobre:
+- Exatamente quais elementos visuais copiar de cada imagem
+- Cores exatas, fontes, posicionamento de texto
+- Composicao e layout desejados
+- Estilo visual e estetica
+
+Responda APENAS com o prompt final de geracao, sem explicacoes adicionais. O prompt deve ser em ingles para melhor resultado na geracao.`,
+  });
+
+  for (let i = 0; i < images.length; i++) {
+    content.push({
+      type: "image_url",
+      image_url: { url: images[i] },
+    });
+  }
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{ role: "user", content }],
+    max_tokens: 1000,
+  });
+
+  return response.choices[0]?.message?.content || userPrompt;
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const apiKey =
@@ -42,6 +85,11 @@ export async function POST(req: NextRequest) {
     const imgArray: string[] = Array.isArray(images) ? images : images ? [images] : [];
 
     if (imgArray.length > 0) {
+      let enhancedPrompt = prompt.trim();
+      if (imgArray.length >= 2) {
+        enhancedPrompt = await analyzeImagesWithVision(openai, imgArray, prompt.trim());
+      }
+
       const files = await Promise.all(
         imgArray.map((src: string, i: number) => toImageFile(src, `input_${i}.png`))
       );
@@ -50,7 +98,7 @@ export async function POST(req: NextRequest) {
       response = await openai.images.edit({
         model: chosenModel,
         image: imageParam,
-        prompt: prompt.trim(),
+        prompt: enhancedPrompt,
         size: size || "1024x1024",
       } as Parameters<typeof openai.images.edit>[0]);
     } else {
