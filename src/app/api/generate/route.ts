@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   }
 
   const openai = new OpenAI({ apiKey });
-  const chosenModel = model || "gpt-image-1";
+  const chosenModel = model || "gpt-image-2";
 
   try {
     const response = await openai.images.generate({
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       prompt: prompt.trim(),
       n: 1,
       size: size || "1024x1024",
-      quality: chosenModel === "dall-e-3" ? "standard" : "medium",
+      quality: "auto",
     } as Parameters<typeof openai.images.generate>[0]);
 
     const result = response as unknown as { data?: Array<{ url?: string; b64_json?: string; revised_prompt?: string }> };

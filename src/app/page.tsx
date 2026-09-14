@@ -8,6 +8,7 @@ type Attachment = {
   name: string;
   type: string;
   dataUrl: string;
+  textContent?: string;
 };
 
 type Message = {
@@ -44,9 +45,8 @@ const PRESET_SIZES = [
 ];
 
 const IMAGE_MODELS = [
+  { label: "GPT Image 2", value: "gpt-image-2" },
   { label: "GPT Image 1", value: "gpt-image-1" },
-  { label: "DALL-E 3", value: "dall-e-3" },
-  { label: "DALL-E 2", value: "dall-e-2" },
 ];
 
 const DEFAULT_AGENTS: Agent[] = [
@@ -192,7 +192,7 @@ export default function Home() {
   const [size, setSize] = useState("1024x1024");
   const [customW, setCustomW] = useState("1024");
   const [customH, setCustomH] = useState("1024");
-  const [imageModel, setImageModel] = useState("gpt-image-1");
+  const [imageModel, setImageModel] = useState("gpt-image-2");
   const [mode, setMode] = useState<"image" | "chat">("image");
   const [pendingFiles, setPendingFiles] = useState<Attachment[]>([]);
 
@@ -276,12 +276,18 @@ export default function Home() {
     const newAttachments: Attachment[] = [];
     for (const file of Array.from(files)) {
       if (file.size > 20 * 1024 * 1024) continue;
-      const dataUrl = isImageType(file.type)
-        ? await readFileAsDataUrl(file)
-        : await readFileAsText(file).then(
-            (text) => `data:text/plain;base64,${btoa(unescape(encodeURIComponent(text)))}`
-          );
-      newAttachments.push({ name: file.name, type: file.type, dataUrl });
+      if (isImageType(file.type)) {
+        const dataUrl = await readFileAsDataUrl(file);
+        newAttachments.push({ name: file.name, type: file.type, dataUrl });
+      } else {
+        const textContent = await readFileAsText(file);
+        newAttachments.push({
+          name: file.name,
+          type: file.type,
+          dataUrl: "",
+          textContent,
+        });
+      }
     }
     setPendingFiles((prev) => [...prev, ...newAttachments]);
     e.target.value = "";
@@ -302,15 +308,17 @@ export default function Home() {
           > = [];
           if (m.content) parts.push({ type: "text", text: m.content });
           for (const att of m.attachments) {
-            if (isImageType(att.type)) {
+            if (isImageType(att.type) && att.dataUrl) {
               parts.push({ type: "image_url", image_url: { url: att.dataUrl } });
-            } else {
-              const text = atob(att.dataUrl.split(",")[1] || "");
+            } else if (att.textContent) {
               parts.push({
                 type: "text",
-                text: `[Arquivo: ${att.name}]\n${text}`,
+                text: `[Arquivo: ${att.name}]\n${att.textContent}`,
               });
             }
+          }
+          if (parts.length === 0 && m.content) {
+            return { role: m.role, content: m.content };
           }
           return { role: m.role, content: parts };
         }
@@ -340,14 +348,29 @@ export default function Home() {
       )
     );
 
+    const currentFiles = [...pendingFiles];
+    const savedAttachments: Attachment[] | undefined =
+      currentFiles.length > 0
+        ? currentFiles.map((f) =>
+            isImageType(f.type)
+              ? { name: f.name, type: f.type, dataUrl: "(imagem)", textContent: undefined }
+              : { name: f.name, type: f.type, dataUrl: "", textContent: f.textContent }
+          )
+        : undefined;
+
     const userMsg: Message = {
       id: uid(),
       role: "user",
       content: prompt,
-      attachments: pendingFiles.length > 0 ? [...pendingFiles] : undefined,
+      attachments: savedAttachments,
     };
+
+    const userMsgForApi: Message = {
+      ...userMsg,
+      attachments: currentFiles.length > 0 ? currentFiles : undefined,
+    };
+
     updateChatMessages(chatId, (msgs) => [...msgs, userMsg]);
-    const attachments = [...pendingFiles];
     setInput("");
     setPendingFiles([]);
     setLoading(true);
@@ -389,11 +412,13 @@ export default function Home() {
         );
       }
     } else {
-      const currentChat = chats.find((c) => c.id === chatId);
-      const allMsgs = [...(currentChat?.messages ?? []), userMsg];
+      const previousMsgs = (chats.find((c) => c.id === chatId)?.messages ?? [])
+        .filter((m) => !m.isGenerating);
+      const allMsgs = [...previousMsgs, userMsgForApi];
       const chatHistory = buildChatMessages(allMsgs);
 
-      const agent = agents.find((a) => a.id === (currentChat?.agentId || selectedAgentId));
+      const chatForAgent = chats.find((c) => c.id === chatId);
+      const agent = agents.find((a) => a.id === (chatForAgent?.agentId || selectedAgentId));
 
       const assistantId = uid();
       updateChatMessages(chatId, (msgs) => [
@@ -677,12 +702,10 @@ export default function Home() {
                     <div className="mb-2 flex flex-wrap gap-2">
                       {msg.attachments.map((att, i) =>
                         isImageType(att.type) ? (
-                          <img
-                            key={i}
-                            src={att.dataUrl}
-                            alt={att.name}
-                            className="h-24 w-24 rounded-lg object-cover"
-                          />
+                          <div key={i} className="flex items-center gap-1.5 rounded-lg bg-background/50 px-2 py-1">
+                            <span className="text-xs">🖼</span>
+                            <span className="text-xs text-muted">{att.name}</span>
+                          </div>
                         ) : (
                           <div key={i} className="flex items-center gap-1.5 rounded-lg bg-background/50 px-2 py-1">
                             <IconPaperclip className="h-3 w-3 text-muted" />
