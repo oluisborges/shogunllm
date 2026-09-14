@@ -9,6 +9,7 @@ type Attachment = {
   type: string;
   dataUrl: string;
   textContent?: string;
+  thumbnailUrl?: string;
 };
 
 type Message = {
@@ -178,6 +179,23 @@ function isImageType(type: string) {
   return type.startsWith("image/");
 }
 
+function createThumbnail(dataUrl: string, maxSize = 150): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.5));
+    };
+    img.onerror = () => resolve("");
+    img.src = dataUrl;
+  });
+}
+
 // ── Main Component ──────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -278,7 +296,8 @@ export default function Home() {
       if (file.size > 20 * 1024 * 1024) continue;
       if (isImageType(file.type)) {
         const dataUrl = await readFileAsDataUrl(file);
-        newAttachments.push({ name: file.name, type: file.type, dataUrl });
+        const thumbnailUrl = await createThumbnail(dataUrl);
+        newAttachments.push({ name: file.name, type: file.type, dataUrl, thumbnailUrl });
       } else {
         const textContent = await readFileAsText(file);
         newAttachments.push({
@@ -353,7 +372,7 @@ export default function Home() {
       currentFiles.length > 0
         ? currentFiles.map((f) =>
             isImageType(f.type)
-              ? { name: f.name, type: f.type, dataUrl: "(imagem)", textContent: undefined }
+              ? { name: f.name, type: f.type, dataUrl: "", thumbnailUrl: f.thumbnailUrl, textContent: undefined }
               : { name: f.name, type: f.type, dataUrl: "", textContent: f.textContent }
           )
         : undefined;
@@ -383,6 +402,17 @@ export default function Home() {
       ]);
 
       const imageAttachment = currentFiles.find((f) => isImageType(f.type));
+      let imageForEdit = imageAttachment?.dataUrl || undefined;
+
+      if (!imageForEdit) {
+        const prevMsgs = chats.find((c) => c.id === chatId)?.messages ?? [];
+        for (let i = prevMsgs.length - 1; i >= 0; i--) {
+          if (prevMsgs[i].role === "assistant" && prevMsgs[i].imageUrl) {
+            imageForEdit = prevMsgs[i].imageUrl;
+            break;
+          }
+        }
+      }
 
       try {
         const res = await fetch("/api/generate", {
@@ -392,7 +422,7 @@ export default function Home() {
             prompt,
             size: resolvedSize,
             model: imageModel,
-            image: imageAttachment?.dataUrl || undefined,
+            image: imageForEdit || undefined,
           }),
         });
         const data = await res.json();
@@ -709,9 +739,15 @@ export default function Home() {
                     <div className="mb-2 flex flex-wrap gap-2">
                       {msg.attachments.map((att, i) =>
                         isImageType(att.type) ? (
-                          <div key={i} className="flex items-center gap-1.5 rounded-lg bg-background/50 px-2 py-1">
-                            <span className="text-xs">🖼</span>
-                            <span className="text-xs text-muted">{att.name}</span>
+                          <div key={i} className="overflow-hidden rounded-lg bg-background/50">
+                            {att.thumbnailUrl ? (
+                              <img src={att.thumbnailUrl} alt={att.name} className="h-24 w-auto rounded-lg object-cover" />
+                            ) : (
+                              <div className="flex items-center gap-1.5 px-2 py-1">
+                                <span className="text-xs">🖼</span>
+                                <span className="text-xs text-muted">{att.name}</span>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div key={i} className="flex items-center gap-1.5 rounded-lg bg-background/50 px-2 py-1">

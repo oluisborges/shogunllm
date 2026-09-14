@@ -29,8 +29,14 @@ export async function POST(req: NextRequest) {
     let response: unknown;
 
     if (image && typeof image === "string") {
-      const base64Data = image.includes(",") ? image.split(",")[1] : image;
-      const buf = Buffer.from(base64Data, "base64");
+      let buf: Buffer;
+      if (image.startsWith("http://") || image.startsWith("https://")) {
+        const imgRes = await fetch(image);
+        buf = Buffer.from(await imgRes.arrayBuffer());
+      } else {
+        const base64Data = image.includes(",") ? image.split(",")[1] : image;
+        buf = Buffer.from(base64Data, "base64");
+      }
       const file = await toFile(buf, "input.png", { type: "image/png" });
 
       response = await openai.images.edit({
