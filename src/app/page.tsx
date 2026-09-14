@@ -244,6 +244,7 @@ export default function Home() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageCache = useRef(new Map<string, string>());
+  const attachmentCache = useRef(new Map<string, Attachment[]>());
 
   const activeChat = chats.find((c) => c.id === activeChatId) ?? null;
   const messages = activeChat?.messages ?? [];
@@ -356,14 +357,16 @@ export default function Home() {
     return chatMsgs
       .filter((m) => !m.isGenerating)
       .map((m) => {
-        if (m.attachments && m.attachments.length > 0) {
+        const cachedAtts = attachmentCache.current.get(m.id);
+        const atts = cachedAtts || m.attachments;
+        if (atts && atts.length > 0) {
           const parts: Array<
             | { type: "text"; text: string }
             | { type: "image_url"; image_url: { url: string } }
           > = [];
           if (m.content) parts.push({ type: "text", text: m.content });
-          for (const att of m.attachments) {
-            if (isImageType(att.type) && att.dataUrl) {
+          for (const att of atts) {
+            if (isImageType(att.type) && att.dataUrl && att.dataUrl !== "") {
               parts.push({ type: "image_url", image_url: { url: att.dataUrl } });
             } else if (att.textContent) {
               parts.push({
@@ -424,6 +427,10 @@ export default function Home() {
       ...userMsg,
       attachments: currentFiles.length > 0 ? currentFiles : undefined,
     };
+
+    if (currentFiles.length > 0) {
+      attachmentCache.current.set(userMsg.id, currentFiles);
+    }
 
     updateChatMessages(chatId, (msgs) => [...msgs, userMsg]);
     setInput("");
