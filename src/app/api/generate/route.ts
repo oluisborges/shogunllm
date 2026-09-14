@@ -2,19 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const body = await req.json();
+  const apiKey =
+    req.headers.get("x-api-key") || process.env.OPENAI_API_KEY;
+
   if (!apiKey) {
     return NextResponse.json(
-      { error: "API key não configurada. Defina OPENAI_API_KEY no servidor." },
-      { status: 500 }
+      { error: "API key nao configurada. Va em Configuracoes e adicione sua chave." },
+      { status: 401 }
     );
   }
 
-  const { prompt, size, model } = await req.json();
+  const { prompt, size } = body;
 
   if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
     return NextResponse.json(
-      { error: "Prompt é obrigatório." },
+      { error: "Prompt e obrigatorio." },
       { status: 400 }
     );
   }
@@ -23,7 +26,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const response = await openai.images.generate({
-      model: model || "dall-e-3",
+      model: "dall-e-3",
       prompt: prompt.trim(),
       n: 1,
       size: size || "1024x1024",

@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey =
+    req.headers.get("x-api-key") || process.env.OPENAI_API_KEY;
+
   if (!apiKey) {
     return NextResponse.json(
-      { error: "API key não configurada. Defina OPENAI_API_KEY no servidor." },
-      { status: 500 }
+      { error: "API key nao configurada. Va em Configuracoes e adicione sua chave." },
+      { status: 401 }
     );
   }
 
@@ -14,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   if (!Array.isArray(messages) || messages.length === 0) {
     return NextResponse.json(
-      { error: "Mensagens são obrigatórias." },
+      { error: "Mensagens sao obrigatorias." },
       { status: 400 }
     );
   }
@@ -28,7 +30,7 @@ export async function POST(req: NextRequest) {
         {
           role: "system",
           content:
-            "Você é o assistente de IA do Grupo Shogun. Ajude os usuários a criar prompts de geração de imagens. Responda sempre em português do Brasil de forma amigável e profissional. Quando o usuário pedir para gerar uma imagem, responda com uma descrição detalhada do prompt que será usado e confirme que a imagem está sendo gerada.",
+            "Voce e o assistente de IA do Grupo Shogun. Ajude os usuarios a criar prompts de geracao de imagens. Responda sempre em portugues do Brasil de forma amigavel e profissional. Quando o usuario pedir para gerar uma imagem, responda com uma descricao detalhada do prompt que sera usado e confirme que a imagem esta sendo gerada.",
         },
         ...messages,
       ],
